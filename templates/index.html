@@ -87,6 +87,11 @@
             <td id="status-download">대기 중</td>
             <td id="detail-download">-</td>
           </tr>
+          <tr>
+            <td>변환 엔진</td>
+            <td id="status-backend">대기 중</td>
+            <td id="detail-backend">-</td>
+          </tr>
         </tbody>
       </table>
       <div class="progress-bar">
@@ -110,6 +115,8 @@
       const detailConvert = document.getElementById('detail-convert');
       const statusDownload = document.getElementById('status-download');
       const detailDownload = document.getElementById('detail-download');
+      const statusBackend = document.getElementById('status-backend');
+      const detailBackend = document.getElementById('detail-backend');
       const progressFill = document.getElementById('progress-fill');
 
       function setStep(stepId, status, detail) {
@@ -119,6 +126,7 @@
         if (stepId === 'status-upload') detailUpload.textContent = detail;
         if (stepId === 'status-convert') detailConvert.textContent = detail;
         if (stepId === 'status-download') detailDownload.textContent = detail;
+        if (stepId === 'status-backend') detailBackend.textContent = detail;
       }
 
       function setProgress(percent) {
@@ -139,6 +147,7 @@
         setStep('status-upload', '대기 중', '-');
         setStep('status-convert', '대기 중', '-');
         setStep('status-download', '대기 중', '-');
+        setStep('status-backend', '대기 중', '-');
       }
 
       function updateSelectedFile(file) {
@@ -230,6 +239,8 @@
             setProgress(100);
             setStep('status-convert', '완료', '변환이 완료되었습니다.');
             setStep('status-download', '완료', `파일 다운로드를 시작했습니다: ${filename}`);
+            const backendName = xhr.getResponseHeader('X-Conversion-Backend') || 'unknown';
+            setStep('status-backend', '완료', backendName);
             setTimeout(resetUI, 1500);
           } else {
             setError('변환에 실패했습니다. 다시 시도해 주세요.');

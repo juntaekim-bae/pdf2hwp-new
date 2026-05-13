@@ -1,2 +1,4 @@
 Flask>=2.0
 pymupdf>=1.23.0
+pyhwp>=0.1b15
+requests>=2.31.0

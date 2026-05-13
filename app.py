@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from flask import Flask, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
-from pdf_to_hwpx import convert_pdf
+from conversion_backend import convert_pdf
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'change-this-secret')
@@ -47,7 +47,7 @@ def index():
             output_name = input_path.with_suffix('.hwpx').name
             output_path = Path(tmpdir) / output_name
 
-            success = convert_pdf(str(input_path), str(output_path))
+            success, backend_name = convert_pdf(str(input_path), str(output_path))
             if not success or not output_path.exists():
                 flash('PDF 변환에 실패했습니다. 업로드한 파일이 유효한지 확인하세요.')
                 return redirect(url_for('index'))
@@ -57,6 +57,7 @@ def index():
                 as_attachment=True,
                 download_name=output_name,
                 mimetype='application/octet-stream',
+                headers={'X-Conversion-Backend': backend_name},
             )
 
     return render_template('index.html')
