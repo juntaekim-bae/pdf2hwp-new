@@ -56,8 +56,7 @@ def index():
                 output_path,
                 as_attachment=True,
                 download_name=output_name,
-                mimetype='application/octet-stream',
-                headers={'X-Conversion-Backend': backend_name},
+                mimetype='application/octet-stream')
             )
 
     return render_template('index.html')
