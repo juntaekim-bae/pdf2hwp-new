@@ -80,7 +80,6 @@ class ExternalAPIBackend(ConversionBackend):
         log.info('외부 변환 API 호출: %s', self.url)
 
         try:
-            import requests
             response = requests.post(
                 self.url,
                 headers=headers,
@@ -102,13 +101,107 @@ class ExternalAPIBackend(ConversionBackend):
         Path(output_path).write_bytes(response.content)
 
 
+class HancomAPIBackend(ConversionBackend):
+    name = 'hancom'
+
+    def __init__(self) -> None:
+        self.base_url = os.environ.get('HANCOM_API_URL')
+        self.module = os.environ.get('HANCOM_API_MODULE', 'common')
+        self.function = os.environ.get('HANCOM_API_FUNCTION', 'pdf2hwpx')
+        self.method = os.environ.get('HANCOM_API_METHOD', 'POST').upper()
+        self.key = os.environ.get('HANCOM_API_KEY')
+        self.upload = os.environ.get('HANCOM_API_UPLOAD', 'true').strip().lower() in {'1', 'true', 'yes'}
+        self.params = self._load_extra_params()
+
+        if not self.base_url:
+            raise ConversionError('HANCOM_API_URL이 설정되지 않았습니다.')
+
+        self.base_url = self.base_url.rstrip('/')
+        if self.method not in {'GET', 'POST'}:
+            raise ConversionError('HANCOM_API_METHOD는 GET 또는 POST만 지원합니다.')
+
+    def _load_extra_params(self) -> Dict[str, Any]:
+        raw = os.environ.get('HANCOM_API_PARAMS', '{}').strip()
+        if not raw:
+            return {}
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            log.warning('HANCOM_API_PARAMS를 JSON으로 파싱할 수 없습니다. 기본값으로 빈 dict를 사용합니다.')
+            return {}
+
+    def convert(self, input_path: str, output_path: str) -> None:
+        try:
+            import requests
+        except ImportError as exc:
+            raise ConversionError('requests 패키지가 설치되지 않았습니다.') from exc
+
+        url = f'{self.base_url}/{self.module}/{self.function}'
+        ext = Path(output_path).suffix.lstrip('.')
+
+        if self.method == 'GET' and not self.upload:
+            query: Dict[str, Any] = {
+                'file_path': input_path,
+                'output': ext,
+            }
+            query.update(self.params)
+            if self.key:
+                query['key'] = self.key
+
+            log.info('한컴 API GET 호출: %s', url)
+            response = requests.get(url, params=query, timeout=600)
+        else:
+            files = {
+                'file': (
+                    Path(input_path).name,
+                    open(input_path, 'rb'),
+                    'application/pdf',
+                )
+            }
+            data: Dict[str, Any] = {
+                'output': ext,
+            }
+            data.update(self.params)
+            if self.key:
+                data['key'] = self.key
+
+            headers: Dict[str, str] = {
+                'Accept': 'application/octet-stream',
+            }
+
+            log.info('한컴 API POST 호출: %s (upload=%s)', url, self.upload)
+            try:
+                response = requests.post(url, headers=headers, files=files, data=data, timeout=600)
+            finally:
+                files['file'][1].close()
+
+        if response.status_code != 200:
+            raise ConversionError(
+                f'한컴 API 응답 오류: {response.status_code} {response.reason} {response.text[:200]}'
+            )
+
+        if not response.content:
+            raise ConversionError('한컴 API가 빈 결과를 반환했습니다.')
+
+        Path(output_path).write_bytes(response.content)
+
+
 def create_backend() -> ConversionBackend:
+    hancom_url = os.environ.get('HANCOM_API_URL')
     external_url = os.environ.get('EXTERNAL_CONVERTER_URL')
+
+    if hancom_url:
+        try:
+            return HancomAPIBackend()
+        except ConversionError as exc:
+            log.warning('한컴 변환 백엔드 초기화 실패: %s', exc)
+
     if external_url:
         try:
             return ExternalAPIBackend()
         except ConversionError as exc:
             log.warning('외부 변환 백엔드 초기화 실패: %s', exc)
+
     return LocalBackend()
 
 

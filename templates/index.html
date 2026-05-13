@@ -134,14 +134,17 @@
       }
 
       function setError(message) {
+        stopConversionProgress();
         alert(message);
         setStep('status-upload', '실패', message);
         setStep('status-convert', '실패', message);
         setStep('status-download', '실패', message);
+        setStep('status-backend', '실패', message);
       }
 
       function resetUI() {
         fileInput.value = '';
+        stopConversionProgress();
         setProgress(0);
         setStep('status-select', '대기 중', '파일을 선택하거나 드래그하세요.');
         setStep('status-upload', '대기 중', '-');
@@ -204,6 +207,24 @@
         handleFile(file);
       });
 
+      let conversionTimer = null;
+
+      function startConversionProgress() {
+        clearInterval(conversionTimer);
+        conversionTimer = setInterval(() => {
+          const current = parseInt(progressFill.style.width, 10) || 0;
+          if (current < 90) {
+            setProgress(current + 1);
+          } else {
+            clearInterval(conversionTimer);
+          }
+        }, 500);
+      }
+
+      function stopConversionProgress() {
+        clearInterval(conversionTimer);
+      }
+
       function uploadFile(file) {
         const formData = new FormData();
         formData.append('pdf_file', file);
@@ -214,18 +235,40 @@
 
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100 * 0.6);
+            const percent = Math.round((event.loaded / event.total) * 60);
             setProgress(percent);
-            setStep('status-upload', '업로드 중', `${percent}% 완료`);
+            setStep('status-upload', '업로드 중', `${Math.round((event.loaded / event.total) * 100)}% 완료`);
+          }
+        });
+
+        xhr.upload.addEventListener('loadend', () => {
+          setProgress(60);
+          setStep('status-upload', '완료', '업로드가 완료되었습니다. 변환을 준비 중입니다.');
+          setStep('status-convert', '진행 중', '서버 변환을 곧 시작합니다.');
+          setStep('status-backend', '진행 중', '변환 엔진을 대기 중입니다.');
+          startConversionProgress();
+        });
+
+        xhr.addEventListener('loadstart', () => {
+          setStep('status-upload', '완료', '업로드가 완료되었습니다. 변환을 준비 중입니다.');
+        });
+
+        xhr.addEventListener('readystatechange', () => {
+          if (xhr.readyState === 2) {
+            setStep('status-convert', '진행 중', '서버에서 변환을 시작했습니다. 잠시만 기다려 주세요.');
+            setStep('status-download', '대기 중', '변환이 완료되면 자동으로 다운로드가 시작됩니다.');
+            setStep('status-backend', '진행 중', '사용 중인 변환 엔진을 확인합니다.');
+            startConversionProgress();
           }
         });
 
         xhr.addEventListener('load', () => {
+          stopConversionProgress();
           if (xhr.status === 200) {
-            setProgress(80);
-            setStep('status-upload', '완료', '업로드가 완료되었습니다. 변환 중입니다.');
-            setStep('status-convert', '진행 중', '서버에서 PDF를 변환합니다. 잠시만 기다려 주세요.');
-            setStep('status-download', '대기 중', '변환이 완료되면 자동으로 다운로드가 시작됩니다.');
+            setProgress(95);
+            setStep('status-upload', '완료', '업로드가 완료되었습니다.');
+            setStep('status-convert', '완료', '서버 변환이 완료되었습니다.');
+            setStep('status-download', '진행 중', '다운로드를 준비합니다.');
             const filename = getFilenameFromResponse(xhr) || file.name.replace(/\.pdf$/i, '.hwpx');
             const blob = xhr.response;
             const link = document.createElement('a');
@@ -237,7 +280,6 @@
             link.remove();
             window.URL.revokeObjectURL(url);
             setProgress(100);
-            setStep('status-convert', '완료', '변환이 완료되었습니다.');
             setStep('status-download', '완료', `파일 다운로드를 시작했습니다: ${filename}`);
             const backendName = xhr.getResponseHeader('X-Conversion-Backend') || 'unknown';
             setStep('status-backend', '완료', backendName);
