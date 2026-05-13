@@ -57,7 +57,6 @@ def index():
                 as_attachment=True,
                 download_name=output_name,
                 mimetype='application/octet-stream')
-            )
 
     return render_template('index.html')
 
