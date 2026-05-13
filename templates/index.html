@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF → HWPX 변환 서비스</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    header { margin-bottom: 2rem; }
+    main { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 2rem; box-shadow: 0 8px 24px rgba(0,0,0,.05); }
+    h1 { margin-top: 0; }
+    .flash { background: #ffefef; border: 1px solid #f4c2c2; color: #8a1515; padding: 0.9rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+    .form-row { margin-bottom: 1rem; }
+    input[type=file] { display: block; margin-bottom: 1rem; }
+    button { background: #0451a5; color: #fff; border: none; border-radius: 8px; padding: 0.9rem 1.4rem; cursor: pointer; font-size: 1rem; }
+    button:hover { background: #023a80; }
+    .drop-zone { border: 2px dashed #87aaff; border-radius: 14px; padding: 2rem; margin-bottom: 1rem; text-align: center; color: #3a4f7a; background: #f8fbff; transition: background .2s, border-color .2s; }
+    .drop-zone.dragover { background: #eef4ff; border-color: #3f6de0; }
+    .status-panel { margin-top: 2rem; }
+    .status-panel h2 { margin-bottom: 1rem; font-size: 1.1rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { text-align: left; padding: 0.85rem 0.75rem; border-bottom: 1px solid #e5e5e5; }
+    th { background: #f6f8ff; color: #333; }
+    td { color: #444; }
+    .progress-bar { height: 12px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin-bottom: 1rem; }
+    .progress-fill { width: 0; height: 100%; background: linear-gradient(90deg, #3f6de0, #1f4fc1); transition: width .2s ease; }
+    footer { margin-top: 2rem; color: #666; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PDF → HWPX 변환 서비스</h1>
+    <p>PDF 파일을 업로드하면 HWPX 형식으로 변환된 파일을 다운로드합니다.</p>
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" enctype="multipart/form-data" id="upload-form">
+      <div class="drop-zone" id="drop-zone">
+        <p>여기에 PDF 파일을 드래그 앤 드롭하세요.</p>
+        <p>또는 아래 버튼으로 파일을 선택할 수 있습니다.</p>
+      </div>
+      <div class="form-row">
+        <label for="pdf_file">PDF 파일 선택</label>
+        <input type="file" id="pdf_file" name="pdf_file" accept="application/pdf" required>
+      </div>
+      <button type="submit">변환 후 다운로드</button>
+    </form>
+
+    <section class="status-panel">
+      <h2>진행 상황</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>단계</th>
+            <th>상태</th>
+            <th>세부</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>파일 선택</td>
+            <td id="status-select">대기 중</td>
+            <td id="detail-select">파일을 선택하거나 드래그하세요.</td>
+          </tr>
+          <tr>
+            <td>업로드</td>
+            <td id="status-upload">대기 중</td>
+            <td id="detail-upload">-</td>
+          </tr>
+          <tr>
+            <td>변환</td>
+            <td id="status-convert">대기 중</td>
+            <td id="detail-convert">-</td>
+          </tr>
+          <tr>
+            <td>다운로드 준비</td>
+            <td id="status-download">대기 중</td>
+            <td id="detail-download">-</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>최대 업로드 파일 크기: 100MB</p>
+      <p>변환된 파일은 브라우저의 다운로드 위치에 저장됩니다. 브라우저 설정에서 다운로드 위치를 바탕화면으로 변경하면 바탕화면에 저장됩니다.</p>
+    </footer>
+    <script>
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('pdf_file');
+      const form = document.getElementById('upload-form');
+      const statusSelect = document.getElementById('status-select');
+      const detailSelect = document.getElementById('detail-select');
+      const statusUpload = document.getElementById('status-upload');
+      const detailUpload = document.getElementById('detail-upload');
+      const statusConvert = document.getElementById('status-convert');
+      const detailConvert = document.getElementById('detail-convert');
+      const statusDownload = document.getElementById('status-download');
+      const detailDownload = document.getElementById('detail-download');
+      const progressFill = document.getElementById('progress-fill');
+
+      function setStep(stepId, status, detail) {
+        const stepEl = document.getElementById(stepId);
+        stepEl.textContent = status;
+        if (stepId === 'status-select') detailSelect.textContent = detail;
+        if (stepId === 'status-upload') detailUpload.textContent = detail;
+        if (stepId === 'status-convert') detailConvert.textContent = detail;
+        if (stepId === 'status-download') detailDownload.textContent = detail;
+      }
+
+      function setProgress(percent) {
+        progressFill.style.width = `${percent}%`;
+      }
+
+      function setError(message) {
+        alert(message);
+        setStep('status-upload', '실패', message);
+        setStep('status-convert', '실패', message);
+        setStep('status-download', '실패', message);
+      }
+
+      function resetUI() {
+        fileInput.value = '';
+        setProgress(0);
+        setStep('status-select', '대기 중', '파일을 선택하거나 드래그하세요.');
+        setStep('status-upload', '대기 중', '-');
+        setStep('status-convert', '대기 중', '-');
+        setStep('status-download', '대기 중', '-');
+      }
+
+      function updateSelectedFile(file) {
+        setStep('status-select', '완료', file.name);
+        setStep('status-upload', '대기 중', '파일 업로드를 시작합니다.');
+      }
+
+      function handleFile(file) {
+        if (file.type !== 'application/pdf') {
+          alert('PDF 파일만 업로드할 수 있습니다.');
+          return;
+        }
+        fileInput.files = new DataTransfer().files;
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+        updateSelectedFile(file);
+        uploadFile(file);
+      }
+
+      dropZone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+      });
+
+      dropZone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = event.dataTransfer.files;
+        if (!files.length) {
+          return;
+        }
+        handleFile(files[0]);
+      });
+
+      fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          handleFile(file);
+        }
+      });
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const file = fileInput.files[0];
+        if (!file) {
+          alert('PDF 파일을 선택해 주세요.');
+          return;
+        }
+        handleFile(file);
+      });
+
+      function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('pdf_file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.href);
+        xhr.responseType = 'blob';
+
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100 * 0.6);
+            setProgress(percent);
+            setStep('status-upload', '업로드 중', `${percent}% 완료`);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            setProgress(80);
+            setStep('status-upload', '완료', '업로드가 완료되었습니다. 변환 중입니다.');
+            setStep('status-convert', '진행 중', '서버에서 PDF를 변환합니다. 잠시만 기다려 주세요.');
+            setStep('status-download', '대기 중', '변환이 완료되면 자동으로 다운로드가 시작됩니다.');
+            const filename = getFilenameFromResponse(xhr) || file.name.replace(/\.pdf$/i, '.hwpx');
+            const blob = xhr.response;
+            const link = document.createElement('a');
+            const url = window.URL.createObjectURL(blob);
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            setProgress(100);
+            setStep('status-convert', '완료', '변환이 완료되었습니다.');
+            setStep('status-download', '완료', `파일 다운로드를 시작했습니다: ${filename}`);
+            setTimeout(resetUI, 1500);
+          } else {
+            setError('변환에 실패했습니다. 다시 시도해 주세요.');
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          setError('서버 연결 중 오류가 발생했습니다.');
+        });
+
+        xhr.addEventListener('abort', () => {
+          setError('업로드가 취소되었습니다.');
+        });
+
+        xhr.send(formData);
+      }
+
+      function getFilenameFromResponse(xhr) {
+        const disposition = xhr.getResponseHeader('Content-Disposition');
+        if (!disposition) return null;
+        const filenameMatch = /filename="?([^";]+)"?/.exec(disposition);
+        return filenameMatch ? filenameMatch[1] : null;
+      }
+    </script>
+  </main>
+</body>
+</html>

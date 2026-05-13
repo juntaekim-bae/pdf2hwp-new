@@ -1,1 +1,2 @@
+Flask>=2.0
 pymupdf>=1.23.0
