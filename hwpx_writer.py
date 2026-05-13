@@ -4,10 +4,18 @@ Generates HWPX (Hancom OWPML) ZIP archives that open in Hancom Hangul 2014+.
 """
 import io
 import re
+import sys
 import zipfile
 import html as _html
 from pathlib import Path
 from typing import List, Optional
+
+
+def _resource(filename: str) -> Path:
+    """PyInstaller 번들 또는 일반 실행 모두에서 리소스 경로를 반환."""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS) / filename
+    return Path(__file__).parent / filename
 
 # HWPUNIT: 1/7200 inch; 1pt = 100 HU; 1mm ≈ 283 HU
 MM = 283.46
