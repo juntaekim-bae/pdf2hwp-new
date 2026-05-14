@@ -150,9 +150,9 @@ _CONTENT_HPF = f"""\
 _VERSION_XML = (
     "<?xml version='1.0' encoding='UTF-8'?>"
     '<hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version" '
-    'tagetApplication="WORDPROCESSOR" major="5" minor="1" micro="1" '
-    'buildNumber="0" os="1" xmlVersion="1.5" '
-    'application="Hancom Office Hangul" appVersion="13, 0, 0, 1408 WIN32LEWindows_10"/>'
+    'targetApplication="WORDPROCESSOR" major="5" minor="0" micro="0" '
+    'buildNumber="0" os="1" xmlVersion="1.0" '
+    'application="Hancom Hangul" appVersion="10, 0, 0, 0"/>'
 )
 
 _SETTINGS_XML = """\
@@ -214,7 +214,7 @@ def _charpr_entry_xml(cid: int, bold: bool, height: int, color: str) -> str:
     bold_tag = '        <hh:bold/>\n' if bold else ''
     return (
         f'      <hh:charPr id="{cid}" height="{height}" textColor="{color}" '
-        f'shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">\n'
+        f'shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="2">\n'
         f'        <hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>\n'
         f'        <hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>\n'
         f'        <hh:spacing hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>\n'
@@ -375,8 +375,23 @@ class HWPXWriter:
             cw = CONTENT_W // n_cols
             col_widths = [cw] * n_cols
         row_h = int(8 * MM)
+        # ID 예약 순서: tbl_id → 셀 p ID들 → 외부 p ID
+        # 이렇게 해야 이후 add_paragraph가 더 높은 ID를 받아 top-level p ID가 오름차순 유지
+        tbl_id = self._pid
+        self._pid += 1
+        cell_pids = []
+        for ri in range(n_rows):
+            row_pids = []
+            for ci in range(n_cols):
+                row_pids.append(self._pid)
+                self._pid += 1
+            cell_pids.append(row_pids)
+        outer_pid = self._pid
+        self._pid += 1
         self._items.append(('table', {
-            'id':         self._pid,
+            'id':         tbl_id,
+            'outer_pid':  outer_pid,
+            'cell_pids':  cell_pids,
             'rows':       rows,
             'n_rows':     n_rows,
             'n_cols':     n_cols,
@@ -386,7 +401,6 @@ class HWPXWriter:
             'total_h':    row_h * n_rows,
             'header_row': header_row,
         }))
-        self._pid += 1
 
     def add_page_break(self) -> None:
         self.add_paragraph('', page_break=True)
@@ -424,13 +438,39 @@ class HWPXWriter:
     # XML builders
     # ------------------------------------------------------------------
 
+    def _text_run_xml(self, text: str) -> str:
+        """Convert text with tabs/newlines into HWPX run content."""
+        if not text:
+            return '      <hp:t/>'
+
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        parts = []
+        buffer = []
+
+        def flush():
+            if buffer:
+                parts.append('      <hp:t>' + _e(''.join(buffer)) + '</hp:t>')
+                buffer.clear()
+
+        for ch in text:
+            if ch == '\t':
+                flush()
+                parts.append('      <hp:tab/>')
+            elif ch == '\n':
+                flush()
+                parts.append('      <hp:lineBreak/>')
+            else:
+                buffer.append(ch)
+        flush()
+        return '\n'.join(parts)
+
     def _para_xml(self, item: dict) -> str:
         pb = '1' if item['page_break'] else '0'
         return (
             f'  <hp:p id="{item["id"]}" paraPrIDRef="{item["para_pr"]}" '
             f'styleIDRef="0" pageBreak="{pb}" columnBreak="0" merged="0">\n'
             f'    <hp:run charPrIDRef="{item["char_pr"]}">\n'
-            f'      <hp:t>{_e(item["text"])}</hp:t>\n'
+            f'{self._text_run_xml(item["text"])}\n'
             f'    </hp:run>\n'
             f'  </hp:p>\n'
         )
@@ -469,6 +509,7 @@ class HWPXWriter:
         n_cols     = item['n_cols']
         header_row = item['header_row']
 
+        cell_pids = item['cell_pids']
         rows_xml = []
         for ri, row in enumerate(rows):
             is_header = header_row and ri == 0
@@ -477,17 +518,17 @@ class HWPXWriter:
                 text    = str(row[ci]) if ci < len(row) else ''
                 char_pr = self._get_charpr(is_header, 10.0)
                 cw      = col_widths[ci]
-                self._pid += 1
+                cpid    = cell_pids[ri][ci]
                 cells.append(
                     f'      <hp:tc borderFillIDRef="2">\n'
                     f'        <hp:cellAddr colAddr="{ci}" rowAddr="{ri}" colSpan="1" rowSpan="1"/>\n'
                     f'        <hp:cellSz width="{cw}" height="{row_h}"/>\n'
                     f'        <hp:cellMargin left="510" right="510" top="142" bottom="142"/>\n'
                     f'        <hp:subList>\n'
-                    f'          <hp:p id="{self._pid}" paraPrIDRef="0" styleIDRef="0" '
+                    f'          <hp:p id="{cpid}" paraPrIDRef="0" styleIDRef="0" '
                     f'pageBreak="0" columnBreak="0" merged="0">\n'
                     f'            <hp:run charPrIDRef="{char_pr}">\n'
-                    f'              <hp:t>{_e(text)}</hp:t>\n'
+                    f'{self._text_run_xml(text)}\n'
                     f'            </hp:run>\n'
                     f'          </hp:p>\n'
                     f'        </hp:subList>\n'
@@ -495,6 +536,7 @@ class HWPXWriter:
                 )
             rows_xml.append(f'    <hp:tr>\n{"".join(cells)}    </hp:tr>\n')
 
+        outer_pid = item['outer_pid']
         tbl_xml = (
             f'      <hp:tbl id="{item["id"]}" rowCnt="{item["n_rows"]}" '
             f'colCnt="{n_cols}" cellSpacing="0" borderFillIDRef="2">\n'
@@ -506,9 +548,8 @@ class HWPXWriter:
             f'{"".join(rows_xml)}'
             f'      </hp:tbl>\n'
         )
-        self._pid += 1
         return (
-            f'  <hp:p id="{self._pid}" paraPrIDRef="0" styleIDRef="0" '
+            f'  <hp:p id="{outer_pid}" paraPrIDRef="0" styleIDRef="0" '
             f'pageBreak="0" columnBreak="0" merged="0">\n'
             f'    <hp:run charPrIDRef="0">\n'
             f'{tbl_xml}'

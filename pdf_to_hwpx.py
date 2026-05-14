@@ -2,7 +2,7 @@
 """
 PDF → HWPX 일괄 변환기
 사용법:
-  python3 pdf_to_hwpx.py input.pdf output.hwpx          # 단일 파일
+  python3 pdf_to_hwpx.py input.pdf output.hwp          # 단일 파일
   python3 pdf_to_hwpx.py input_folder/ output_folder/   # 폴더 일괄 변환
 """
 import sys
@@ -15,7 +15,8 @@ try:
 except ImportError:
     sys.exit("PyMuPDF가 설치되지 않았습니다. 먼저 실행하세요: pip3 install pymupdf")
 
-from hwpx_writer import HWPXWriter, _color_hex
+from hwp5_bin_writer import HWP5Writer
+from hwpx_writer import _color_hex
 
 logging.basicConfig(
     level=logging.INFO,
@@ -200,12 +201,12 @@ def _text_in_table(y0: float, tables: List[dict]) -> bool:
 # ---------------------------------------------------------------------------
 
 def convert_page(
-    writer: HWPXWriter,
+    writer: HWP5Writer,
     page: fitz.Page,
     doc: fitz.Document,
     is_first: bool,
 ) -> None:
-    """한 페이지를 HWPX writer에 추가."""
+    """한 페이지를 HWP5 writer에 추가."""
     tables      = _detect_tables(page)
     text_blocks = _extract_text_blocks(page)
     images      = _extract_images(page, doc)
@@ -259,14 +260,14 @@ def convert_page(
 
 
 def convert_pdf(input_path: str, output_path: str) -> bool:
-    """PDF 파일 하나를 HWPX로 변환. 성공 시 True."""
+    """PDF 파일 하나를 HWP5로 변환. 성공 시 True."""
     try:
         doc = fitz.open(input_path)
     except Exception as e:
         log.error("PDF 열기 실패: %s — %s", input_path, e)
         return False
 
-    writer = HWPXWriter()
+    writer = HWP5Writer()
     total = doc.page_count
     log.info("변환 시작: %s  (%d 페이지)", Path(input_path).name, total)
 
@@ -299,7 +300,7 @@ def batch_convert(input_dir: str, output_dir: str) -> Tuple[int, int]:
     ok = err = 0
     for pdf in pdfs:
         rel = pdf.relative_to(input_dir)
-        out = Path(output_dir) / rel.with_suffix('.hwpx')
+        out = Path(output_dir) / rel.with_suffix('.hwp')
         if convert_pdf(str(pdf), str(out)):
             ok += 1
         else:
@@ -325,7 +326,7 @@ def main():
         print(f"\n완료: 성공 {ok}개, 실패 {err}개")
     elif src.is_file() and src.suffix.lower() == '.pdf':
         if dst.is_dir():
-            dst = dst / src.with_suffix('.hwpx').name
+            dst = dst / src.with_suffix('.hwp').name
         success = convert_pdf(str(src), str(dst))
         sys.exit(0 if success else 1)
     else:

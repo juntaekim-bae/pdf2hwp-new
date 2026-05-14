@@ -73,14 +73,11 @@
       <hh:borderFill id="2" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">
         <hh:slash type="NONE" Crooked="0" isCounter="0"/>
         <hh:backSlash type="NONE" Crooked="0" isCounter="0"/>
-        <hh:leftBorder type="NONE" width="0.1 mm" color="#000000"/>
-        <hh:rightBorder type="NONE" width="0.1 mm" color="#000000"/>
-        <hh:topBorder type="NONE" width="0.1 mm" color="#000000"/>
-        <hh:bottomBorder type="NONE" width="0.1 mm" color="#000000"/>
-        <hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/>
-        <hc:fillBrush>
-          <hc:winBrush faceColor="none" hatchColor="#999999" alpha="0"/>
-        </hc:fillBrush>
+        <hh:leftBorder type="SOLID" width="0.4 mm" color="#000000"/>
+        <hh:rightBorder type="SOLID" width="0.4 mm" color="#000000"/>
+        <hh:topBorder type="SOLID" width="0.4 mm" color="#000000"/>
+        <hh:bottomBorder type="SOLID" width="0.4 mm" color="#000000"/>
+        <hh:diagonal type="NONE" width="0.1 mm" color="#000000"/>
       </hh:borderFill>
     </hh:borderFills>
     <hh:charProperties itemCnt="7">
@@ -809,6 +806,9 @@
       <hh:style id="21" type="PARA" name="차례 3" engName="TOC 3" paraPrIDRef="15" charPrIDRef="6" nextStyleIDRef="21" langID="1042" lockForm="0"/>
       <hh:style id="22" type="PARA" name="캡션" engName="Caption" paraPrIDRef="19" charPrIDRef="0" nextStyleIDRef="22" langID="1042" lockForm="0"/>
     </hh:styles>
+    <hh:outlineShapes itemCnt="1">
+      <hh:outlineShape id="1" numFormat1="DIGIT" numFormat2="HANGUL_SYLLABLE" numFormat3="DIGIT" numFormat4="HANGUL_SYLLABLE" numFormat5="DIGIT" numFormat6="HANGUL_SYLLABLE" numFormat7="CIRCLED_DIGIT" charPrIDRef1="4294967295" charPrIDRef2="4294967295" charPrIDRef3="4294967295" charPrIDRef4="4294967295" charPrIDRef5="4294967295" charPrIDRef6="4294967295" charPrIDRef7="4294967295"/>
+    </hh:outlineShapes>
   </hh:refList>
   <hh:compatibleDocument targetProgram="HWP201X">
     <hh:layoutCompatibility/>

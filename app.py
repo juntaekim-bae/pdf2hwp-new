@@ -1,3 +1,4 @@
+import io
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -44,7 +45,7 @@ def index():
             input_path = Path(tmpdir) / filename
             uploaded_file.save(input_path)
 
-            output_name = input_path.with_suffix('.hwpx').name
+            output_name = input_path.with_suffix('.hwp').name
             output_path = Path(tmpdir) / output_name
 
             success, backend_name = convert_pdf(str(input_path), str(output_path))
@@ -52,11 +53,16 @@ def index():
                 flash('PDF 변환에 실패했습니다. 업로드한 파일이 유효한지 확인하세요.')
                 return redirect(url_for('index'))
 
-            return send_file(
-                output_path,
-                as_attachment=True,
-                download_name=output_name,
-                mimetype='application/octet-stream')
+            # 임시 디렉토리가 삭제되기 전에 파일을 메모리로 읽어야 함
+            output_bytes = io.BytesIO(output_path.read_bytes())
+
+        response = send_file(
+            output_bytes,
+            as_attachment=True,
+            download_name=output_name,
+            mimetype='application/octet-stream')
+        response.headers['X-Conversion-Backend'] = backend_name
+        return response
 
     return render_template('index.html')
 
